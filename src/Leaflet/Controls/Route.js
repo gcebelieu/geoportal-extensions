@@ -298,8 +298,7 @@ var Route = L.Control.extend(/** @lends L.geoportalControl.Route.prototype */ {
             _res = [
                 "StreetAddress",
                 "PositionOfInterest"
-                // "CadastralParcel",
-                // "Administratif"
+                // "CadastralParcel"
             ];
         }
 

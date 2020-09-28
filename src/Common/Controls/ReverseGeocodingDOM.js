@@ -356,12 +356,6 @@ var ReverseGeocodingDOM = {
                     CPOption.text = "Parcelles cadastrales";
                     select.appendChild(CPOption);
                     break;
-                case "Administratif":
-                    var adminOption = document.createElement("option");
-                    adminOption.value = "Administratif";
-                    adminOption.text = "Unités administratives";
-                    select.appendChild(adminOption);
-                    break;
                 default:
                     break;
             }

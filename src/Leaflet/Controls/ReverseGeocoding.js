@@ -33,7 +33,7 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
     options : {
         position : "bottomleft",
         collapsed : true,
-        resources : ["StreetAddress", "PositionOfInterest"],
+        resources : ["StreetAddress", "PositionOfInterest", "CadastralParcel"],
         delimitations : ["Point", "Circle", "Extent"],
         reverseGeocodeOptions : {}
     },
@@ -45,14 +45,14 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
      * @param {Boolean} [options.ssl = true] - use of ssl or not (default true, service requested using https protocol)
      * @param {String}  [options.position] - position of component into the map, 'topleft' by default
      * @param {Boolean} [options.collapsed] - Specify if widget has to be collapsed (true) or not (false) on map loading. Default is true.
-     * @param {Array}  [options.resources] - resources for geocoding, by default : ["StreetAddress", "PositionOfInterest"]
+     * @param {Array}  [options.resources] - resources for geocoding, by default : ["StreetAddress", "PositionOfInterest","CadastralParcel"]
      * @param {Array}  [options.delimitations] - delimitations for reverse geocoding, by default : ["Point", "Circle", "Extent"]
      * @param {Object}  [options.reverseGeocodeOptions] - reverse geocode service options. see {@link http://ignf.github.io/geoportal-access-lib/latest/jsdoc/module-Services.html#~ReverseGeocode Gp.Services.reverseGeocode()} to know all reverse geocode options.
      * @example
      *  var iso = L.geoportalControl.ReverseGeocode({
      *      collapsed : false,
      *      position : "topright",
-     *      resources : ["StreetAddress", "PositionOfInterest"],
+     *      resources : ["StreetAddress", "PositionOfInterest","CadastralParcel"],
      *      delimitations : ["Point", "Circle"],
      *      reverseGeocodeOptions : {}
      *  });
@@ -120,11 +120,8 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
         // #################################################################### //
         // ################### informations pour la requête ################### //
 
-        // position du géocodage inverse qui sera envoyée dans la requête
-        this._requestPosition = null;
-        // eventuels filtres géométriques saisis par l'utilisateur : cercle ou bbox
-        this._requestCircleFilter = null;
-        this._requestBboxFilter = null;
+        // geometrie de recherche du géocodage inverse qui sera envoyée dans la requête
+        this._requestGeom = null;
 
         // pour savoir si un calcul est en cours ou non
         this._waiting = false;
@@ -196,26 +193,28 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
      * @private
      */
     _checkRightsManagement : function () {
-        var _resources = [];
-        var _key;
-        var _opts = null;
-
-        // les ressources du service de geocodage
-        _key = this.options.reverseGeocodeOptions.apiKey;
-        _opts = this.options.reverseGeocodeOptions.filterOptions;
+        var _key = this.options.reverseGeocodeOptions.apiKey;
         // on récupère les éventuelles ressources passées en option, soit dans reverseGeocodeOptions :
-        _resources = (_opts) ? _opts.type : [];
-        // soit directement dans options.resources.geocode :
+        var _resources = (this.options.reverseGeocodeOptions.index) ? this.options.reverseGeocodeOptions.index : "";
+        // soit directement dans options.resources :
         if (!_resources || _resources.length === 0) {
             _resources = this.options.resources;
         }
         // ou celles par défaut sinon.
-        if (!_resources || _resources.length === 0) {
+        if (!_resources || _resources === "") {
+            _resources = "location";
+        }
+
+        if (_resources === "location") {
             _resources = [
                 "StreetAddress",
-                "PositionOfInterest"
+                "PositionOfInterest",
+                "CadastralParcel"
             ];
+        } else {
+            if (!Array.isArray(_resources)) _resources = [_resources];
         }
+
         var rightManagementGeocode = RightManagement.check({
             key : _key || this.options.apiKey,
             resources : _resources,
@@ -257,7 +256,7 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
                 logger.log("[ReverseGeocoding] 'options.resources' parameter should be an array");
                 resources = null;
             }
-            var resourcesList = ["StreetAddress", "PositionOfInterest", "CadastralParcel", "Administratif"];
+            var resourcesList = ["StreetAddress", "PositionOfInterest", "CadastralParcel"];
             for (i = 0; i < resources.length; i++) {
                 if (resourcesList.indexOf(resources[i]) === -1) {
                     // si la resource n'est pas référencée, on l'enlève
@@ -287,7 +286,7 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
 
     /**
      * this method is called by this.initialize() and initialize geocoding type (=resource)
-     * ("StreetAddress", "PositionOfInterest", "CadastralParcel", "Administratif")
+     * ("StreetAddress", "PositionOfInterest", "CadastralParcel")
      *
      * @private
      */
@@ -320,7 +319,7 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
             }
 
             // récupération du type par défaut
-            if (resources[0] === "StreetAddress" || resources[0] === "PositionOfInterest" || resources[0] === "CadastralParcel" || resources[0] === "Administratif") {
+            if (resources[0] === "StreetAddress" || resources[0] === "PositionOfInterest" || resources[0] === "CadastralParcel") {
                 this._currentGeocodingType = resources[0];
             }
         }
@@ -493,7 +492,6 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
                 this._activateCircleInteraction(map);
                 break;
             case "extent":
-
                 this._activateBoxInteraction(map);
                 break;
             default :
@@ -612,41 +610,31 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
         var oLatLng = null;
         if (type === "marker") {
             oLatLng = layer.getLatLng();
-            this._requestPosition = {
-                x : oLatLng.lat,
-                y : oLatLng.lng
+            this._requestGeom = {
+                type : "Point",
+                coordinates : [oLatLng.lng, oLatLng.lat]
             };
         } else if (type === "circle") {
             oLatLng = layer.getLatLng();
-            this._requestPosition = {
-                x : oLatLng.lat,
-                y : oLatLng.lng
-            };
-            this._requestCircleFilter = {
-                x : oLatLng.lat,
-                y : oLatLng.lng,
+            this._requestGeom = {
+                type : "Circle",
+                coordinates : [oLatLng.lng, oLatLng.lat],
                 radius : layer.getRadius()
             };
         } else if (type === "rectangle") {
             oLatLng = layer.getBounds();
-            var center = {
-                lng : (oLatLng.getSouthWest().lng + oLatLng.getNorthEast().lng) / 2,
-                lat : (oLatLng.getSouthWest().lat + oLatLng.getNorthEast().lat) / 2
-            };
-
-            this._requestPosition = {
-                x : center.lat,
-                y : center.lng
-            };
-
-            this._requestBboxFilter = {
-                left : oLatLng.getSouthWest().lat,
-                right : oLatLng.getNorthEast().lat,
-                bottom : oLatLng.getSouthWest().lng,
-                top : oLatLng.getNorthEast().lng
+            this._requestGeom = {
+                type : "Polygon",
+                coordinates : [[
+                    [oLatLng.getNorthWest().lng, oLatLng.getNorthWest().lat],
+                    [oLatLng.getNorthEast().lng, oLatLng.getNorthEast().lat],
+                    [oLatLng.getSouthEast().lng, oLatLng.getSouthEast().lat],
+                    [oLatLng.getSouthWest().lng, oLatLng.getSouthWest().lat],
+                    [oLatLng.getNorthWest().lng, oLatLng.getNorthWest().lat]
+                ]]
             };
         } else {
-            logger.warn("type gemetric not defined !?");
+            logger.warn("type geometric not defined !?");
         }
 
         logger.log(oLatLng);
@@ -713,41 +701,33 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
         // options par defaut
         L.Util.extend(options, {
             apiKey : this.options.apiKey,
-            ssl : this.options.ssl,
-            srs : "EPSG:4326",
-            returnFreeForm : false,
             // maximumResponses : 25, // on peut la surcharger !
             timeOut : 30000,
             protocol : "XHR"
 
         });
 
-        // FIXME pourquoi je perds cette option ????
-        var _type = options.filterOptions.type;
-
         // on récupère d'éventuels filtres
-        if (this._currentGeocodingDelimitation.toLowerCase() === "circle" && this._requestCircleFilter) {
+        if (this._requestGeom.type.toLowerCase() === "circle") {
             // FIXME : a confirmer !
-            if (this._requestCircleFilter.radius > 1000) {
-                logger.log("INFO : initial circle radius (" + this._requestCircleFilter.radius + ") limited to 1000m.");
-                this._requestCircleFilter.radius = 1000;
+            if (this._requestGeom.radius > 1000) {
+                logger.log("INFO : initial circle radius (" + this._requestGeom.radius + ") limited to 1000m.");
+                this._requestGeom.radius = 1000;
             }
-
-            L.Util.extend(options, {
-                filterOptions : {
-                    type : _type,
-                    circle : this._requestCircleFilter
-                }
-            });
-        }
-
-        if (this._currentGeocodingDelimitation.toLowerCase() === "extent" && this._requestBboxFilter) {
-            L.Util.extend(options, {
-                filterOptions : {
-                    type : _type,
-                    bbox : this._requestBboxFilter
-                }
-            });
+            options.searchGeometry = this._requestGeom;
+        } else if (this._requestGeom.type.toLowerCase() === "polygon") {
+            options.searchGeometry = this._requestGeom;
+        } else if (this._requestGeom.type.toLowerCase() === "point") {
+            if (this._currentGeocodingType === "StreetAddress") {
+                options.searchGeometry = {
+                    type : "Circle",
+                    radius : 50,
+                    coordinates : this._requestGeom.coordinates
+                };
+                options.maximumResponses = 1;
+            } else {
+                options.searchGeometry = this._requestGeom;
+            }
         }
 
         logger.log("reverseGeocode request options : ", options);
@@ -846,41 +826,23 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
                     locationDescription += attr.number ? attr.number + " " : "";
                     locationDescription += attr.street + ", ";
                 }
-                locationDescription += attr.postalCode + " " + attr.commune;
+                locationDescription += attr.postalCode + " " + attr.city;
                 break;
 
             case "PositionOfInterest":
-                if (location.matchType === "City" && attr.commune) {
-                    locationDescription += attr.commune;
-                    locationDescription += attr.postalCode ? ", " + attr.postalCode : "";
-                } else if (location.matchType === "Département" && attr.municipality) {
-                    locationDescription += attr.municipality;
-                    locationDescription += attr.postalCode ? ", " + attr.postalCode : "";
-                } else if (location.matchType === "Toponym" && attr.municipality) {
-                    locationDescription += attr.municipality;
-                    locationDescription += attr.postalCode ? ", " + attr.postalCode : "";
-                    locationDescription += attr.commune ? " " + attr.commune : "";
-                } else {
-                    locationDescription += attr.municipality ? attr.municipality : "";
+                locationDescription += attr.toponyme;
+                if (attr.postalCode.length === 1) {
+                    locationDescription += ", " + attr.postalCode[0];
                 }
-                locationDescription += attr.nature ? " (" + attr.nature + ") " : "";
+                locationDescription += " (" + attr.type.join(",") + ")";
                 break;
 
             case "CadastralParcel":
-                locationDescription += attr.cadastralParcel ? attr.cadastralParcel : "";
-                locationDescription += attr.municipality ? " (" + attr.municipality + ")" : "";
+                locationDescription += attr.identifiant;
+                locationDescription += attr.nomCommune ? " (" + attr.nomCommune + ")" : "";
                 break;
 
-            case "Administratif":
-                locationDescription += attr.municipality ? attr.municipality : "";
-                if (attr.inseeDepartment) {
-                    locationDescription += "(Département)";
-                } else if (attr.inseeRegion) {
-                    locationDescription += "(Région)";
-                }
-                break;
-
-            default :
+            default:
                 locationDescription += attr.municipality ? attr.municipality : "";
                 break;
         };
@@ -945,14 +907,14 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
                 zIndexOffset : 1000
             };
 
-            var _marker = L.marker(L.latLng(location.position.x, location.position.y), options);
+            var _marker = L.marker(L.latLng(location.position), options);
 
             // creation du contenu de la popup
             var popupContent = "<ul>";
             var attributes = location.placeAttributes;
             for (var attr in attributes) {
                 if (attributes.hasOwnProperty(attr)) {
-                    if (attr !== "bbox") {
+                    if (attr !== "trueGeometry" && attr !== "extraFields" && attr !== "houseNumberInfos" && attr !== "_count") {
                         popupContent += "<li>";
                         popupContent += "<span class=\"gp-attname-others-span\">" + attr.toUpperCase() + " : </span>";
                         popupContent += attributes[attr];
@@ -1080,8 +1042,8 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
      */
     onReverseGeocodingSubmit : function () {
         // le paramètre position est obligatoire
-        if (!this._requestPosition) {
-            logger.log("missing position");
+        if (!this._requestGeom) {
+            logger.log("missing search geometry");
             return;
         }
 
@@ -1093,10 +1055,7 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
         var map = this._map;
         var self = this;
         this._reverseGeocodingRequest({
-            position : self._requestPosition,
-            filterOptions : {
-                type : [self._currentGeocodingType]
-            },
+            index : self._currentGeocodingType,
             // callback onSuccess
             onSuccess : function (results) {
                 logger.log(results);
@@ -1104,6 +1063,9 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
                     var locations = results.locations;
                     self._displayGeocodedLocations(locations);
                     self._hideWaitingContainer();
+
+                    // et on réactive l'interaction sur la map
+                    if (locations.length === 0) self._activateMapInteraction(map);
                 }
             },
             // callback onFailure
@@ -1116,6 +1078,9 @@ var ReverseGeocoding = L.Control.extend(/** @lends L.geoportalControl.ReverseGeo
 
                 // on efface les points qui ont été saisis précédemment
                 self._clearInputRequest();
+
+                // et on réactive l'interaction sur la map
+                self._activateMapInteraction(map);
 
                 logger.log(error.message);
             }

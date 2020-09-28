@@ -6,6 +6,7 @@ import ID from "../../Common/Utils/SelectorID";
 import LocationSelectorDOM from "../../Common/Controls/LocationSelectorDOM";
 import PositionFormater from "./Utils/PositionFormater";
 import IconDefault from "./Utils/IconDefault";
+import GeocodeUtils from "../../Common/Utils/GeocodeUtils";
 
 var logger = Logger.getLogger("locationselector");
 
@@ -108,7 +109,6 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
         /**
          * coordonnées du point selectionné
          * Ces dernieres sont envoyées à l'API service IGN,
-         * donc X->LON et Y->LAT quelquesoit la logique des projections...
          */
         this._coordinate = null;
 
@@ -191,22 +191,6 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
      */
     setCoordinate : function (coordinate) {
         this._displayResultOfCoordinate(coordinate);
-    },
-    /**
-     * get coordinate inverse (EPSG:4326)
-     * @returns {Object} Coordinate
-     */
-    getCoordinateInverse : function () {
-        if (!this._coordinate) {
-            return;
-        }
-
-        var coordinateInv = {
-            x : this._coordinate.y,
-            y : this._coordinate.x
-        };
-
-        return coordinateInv;
     },
 
     /**
@@ -300,41 +284,45 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
      * @private
      */
     _checkRightsManagement : function () {
-        var _opts = null;
-        var _res = [];
+        var _resources = null;
         var _key = null;
 
         // les ressources du service du calcul inverse de geocodage
         _key = this.options.reverseGeocodeOptions.apiKey;
-        _opts = this.options.reverseGeocodeOptions.filterOptions;
-        _res = (_opts) ? _opts.type : [];
-        if (!_res || _res.length === 0) {
-            _res = [
+        _resources = (this.options.reverseGeocodeOptions.index) ? this.options.reverseGeocodeOptions.index : "";
+        if (!_resources) {
+            _resources = "StreetAddress";
+        }
+        if (_resources === "location") {
+            _resources = [
+                "StreetAddress",
                 "PositionOfInterest",
-                "StreetAddress"
+                "CadastralParcel"
             ];
+        } else {
+            if (!Array.isArray(_resources)) _resources = [_resources];
         }
 
         var rightManagementRerverse = RightManagement.check({
             key : _key || this.options.apiKey,
-            resources : _res,
+            resources : _resources,
             services : ["ReverseGeocode"]
         });
 
         // les ressources du service d'autocompletion
         _key = this.options.autocompleteOptions.apiKey;
-        _opts = this.options.autocompleteOptions.filterOptions;
-        _res = (_opts) ? _opts.type : [];
-        if (!_res || _res.length === 0) {
-            _res = [
-                "PositionOfInterest",
-                "StreetAddress"
+        _resources = (this.options.autocompleteOptions) ? this.options.autocompleteOptions.type : [];
+        // ou celles par défaut sinon.
+        if (!_resources || _resources.length === 0) {
+            _resources = [
+                "StreetAddress",
+                "PositionOfInterest"
             ];
         }
 
         var rightManagementAutoComplete = RightManagement.check({
             key : _key || this.options.apiKey,
-            resources : _res,
+            resources : _resources,
             services : ["AutoCompletion"]
         });
 
@@ -388,10 +376,7 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
 
         // FIXME les coordonnées en lat/lon sur du EPSG:4326 !
         // Mais règle sur les services : X -> LON et Y -> LAT
-        this._coordinate = {
-            x : oLatLng.lng,
-            y : oLatLng.lat
-        };
+        this._coordinate = oLatLng;
 
         var lat = null;
         var lng = null;
@@ -409,7 +394,7 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
      * this method is called by this.on*ResultsItemClick()
      * and move/zoom on a position.
      *
-     * @param {Object} position - {x: ..., y: ...}
+     * @param {Object} position - {lon: ..., lat: ...}
      *
      * @private
      */
@@ -418,9 +403,9 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
 
         var map = this._map;
         // TODO zoom
-        // map.setZoomAround(L.latLng(position.y, position.x), map.getMaxZoom(), true);
+        // map.setZoomAround(L.latLng(position), map.getMaxZoom(), true);
         // FIXME on veut du lat/lon sur Leaflet donc on inverse !
-        map.panTo(L.latLng(position.y, position.x));
+        map.panTo(L.latLng(position));
     },
 
     /**
@@ -428,7 +413,7 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
      * and displays a marker.
      * FIXME : marker IGN et informations ?
      *
-     * @param {Object} position - position {x: ..., y: ...}
+     * @param {Object} position - position {lon: ..., lat: ...}
      * @param {Object|String} information - suggested or geocoded information
      * @param {Boolean} display - display a popup information
      *
@@ -464,7 +449,7 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
             };
 
             // FIXME on veut du lat/lon sur Leaflet donc on inverse !
-            this._marker = L.marker(L.latLng(position.y, position.x), options);
+            this._marker = L.marker(L.latLng(position), options);
 
             this._marker.on("mousedown", this.onMouseDownMarker, this);
             this._marker.on("dragstart", this.onStartDragMarker, this);
@@ -485,20 +470,12 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
                 var popupContent = null;
 
                 if (typeof information !== "string") {
-                    if (information.fields.fullText) {
-                        popupContent = information.fields.fullText;
+                    if (information.service === "GeocodedLocation") {
+                        popupContent = GeocodeUtils.getGeocodedLocationFreeform(information.location);
+                    } else if (information.service === "SuggestedLocation") {
+                        popupContent = GeocodeUtils.getSuggestedLocationFreeform(information.location);
                     } else {
-                        var values = [];
-                        values.push(information.fields.street || "");
-                        values.push(information.fields.postalCode || "");
-                        values.push(information.fields.commune || "");
-
-                        if (information.type === "PositionOfInterest") {
-                            values.push(information.fields.poi || "");
-                            values.push(information.fields.kind || "");
-                        }
-
-                        popupContent = values.join(" - ");
+                        popupContent = "sans informations.";
                     }
                 } else {
                     popupContent = information;
@@ -682,7 +659,7 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
         }
 
         // on ne fait pas de requête si la parametre 'position' est vide !
-        if (!settings.position || Object.keys(settings.position).length === 0) {
+        if (!settings.searchGeometry || Object.keys(settings.searchGeometry).length === 0) {
             return;
         }
 
@@ -717,9 +694,7 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
         // La table de geocodage est toujours par defaut : StreetAddress !
         L.Util.extend(options, {
             returnFreeForm : true, // FIXME cette option n'est pas implementée !?
-            filterOptions : {
-                type : ["StreetAddress"]
-            }
+            index : "StreetAddress"
         });
 
         // cas où la clef API n'est pas renseignée dans les options du service,
@@ -744,10 +719,7 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
         this._setCoordinate(oLatLng);
 
         // on met en place le marker
-        this._setMarker({
-            x : oLatLng.lng,
-            y : oLatLng.lat
-        }, null, false);
+        this._setMarker(oLatLng, null, false);
 
         logger.log(this.getCoordinate());
 
@@ -768,29 +740,25 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
 
         // FIXME on construit une addresse car l'option freeForm ne semble pas
         // être fonctionnelle...
-
-        // Par defaut, on doit être sur du type 'StreetAddress' par defaut.
-        var places = oLocation.placeAttributes;
-        var label = places.number + " " +
-            places.street + ", " +
-            places.postalCode + " " +
-            places.commune;
+        var label = GeocodeUtils.getGeocodedLocationFreeform(oLocation);
 
         // on transmet les coordonnées au panneau,
         // même si on ne les affiche pas...
         this._setCoordinate({
-            lat : oLocation.position.x,
-            lng : oLocation.position.y
+            lat : oLocation.position.lat,
+            lng : oLocation.position.lon
         });
 
         // on transmet le texte au panneau
         this._setLabel(label);
 
+        var info = {
+            service: "GeocodedLocation",
+            location: oLocation,
+        };
+
         // on met en place le marker
-        this._setMarker({
-            x : oLocation.position.y, // LON
-            y : oLocation.position.x // LAT
-        }, null, false);
+        this._setMarker(oLocation.position, info, true);
 
         this._inputShowPointerContainer.checked = false;
         this._inputAutoCompleteContainer.className = "GPlocationOriginVisible";
@@ -889,16 +857,16 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
         }
 
         var position = {
-            x : this._suggestedLocations[idx].position.x, // LON !
-            y : this._suggestedLocations[idx].position.y // LAT !
+            lon : this._suggestedLocations[idx].position.x, // LON !
+            lat : this._suggestedLocations[idx].position.y // LAT !
         };
 
         var info = {
-            type : this._suggestedLocations[idx].type,
-            fields : this._suggestedLocations[idx]
+            service : "SuggestedLocation",
+            location : this._suggestedLocations[idx]
         };
 
-        var label = this._suggestedLocations[idx].fullText;
+        var label = GeocodeUtils.getSuggestedLocationFreeform(this._suggestedLocations[idx]);
         this._setLabel(label);
         this._setPosition(position);
         this._setMarker(position, info, this.options.displayInfo);
@@ -1017,11 +985,12 @@ var LocationSelector = L.Control.extend(/** @lends LocationSelector.prototype */
             // on realise une requête au service, si la reponse est vide ou
             // en échec, on transmet les coordonnées !
             this._requestReverseGeocode({
-                position : {
-                    x : oLatLng.lat, // on envoie X->LAT à l'API service IGN car on spécifie EPSG:4326
-                    y : oLatLng.lng // on envoie Y->LON à l'API service IGN car on spécifie EPSG:4326
+                searchGeometry : {
+                    type : "Circle",
+                    coordinates : [oLatLng.lng, oLatLng.lat],
+                    radius : 50
                 },
-                srs : "EPSG:4326",
+                maximumResponses : 1,
                 // callback onSuccess
                 onSuccess : function (results) {
                     logger.log(results);

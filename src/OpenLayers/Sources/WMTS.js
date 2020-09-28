@@ -121,7 +121,7 @@ var WMTS = (function (WMTSSource) {
         /* patch parce que la fonction getTileCoordForCoordAndResolution(coords,res) d'Openlayers peut renvoyer
         une tuile dont l'étendue (getTileCoordExtent) ne contient pas le point passé en paramètre (coords) */
         var tileSize = tileGrid.getTileSize(tileCoord[0]);
-        x = Math.min(x, (tileSize[0]|tileSize)-1);
+        x = Math.min(x, (tileSize[0] | tileSize) - 1);
         y = Math.max(y, 0);
 
         baseParams["I"] = x;

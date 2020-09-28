@@ -1,5 +1,6 @@
 import ID from "../Utils/SelectorID";
 import Logger from "../../Common/Utils/LoggerByDefault";
+import GeocodeUtils from "../Utils/GeocodeUtils";
 
 var logger = Logger.getLogger("LocationSelectorDOM");
 
@@ -446,7 +447,7 @@ var LocationSelectorDOM = {
         var div = document.createElement("div");
         div.id = this._addUID("AutoCompletedLocation_" + n);
         div.className = "GPautoCompleteProposal";
-        div.innerHTML = location.fullText;
+        div.innerHTML = GeocodeUtils.getSuggestedLocationFreeform(location);
 
         container.appendChild(div);
     },

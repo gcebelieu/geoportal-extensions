@@ -55,8 +55,8 @@ export default {
         // Ex.
         // {
         //   "Itineraire"     : ["Pieton", "Voiture"],
-        //   "Geocode"        : ["PositionOfInterest", "StreetAddress", "CadastralParcel", "Administratif"],
-        //   "AutoCompletion" : ["PositionOfInterest", "StreetAddress", "CadastralParcel", "Administratif"],
+        //   "Geocode"        : ["PositionOfInterest", "StreetAddress", "CadastralParcel"],
+        //   "AutoCompletion" : ["PositionOfInterest", "StreetAddress", "CadastralParcel"],
         //   "Elevation"      : ["SERVICE_CALCUL_ALTIMETRIQUE_RSC"]
         // }
         var _rightManagement = {};

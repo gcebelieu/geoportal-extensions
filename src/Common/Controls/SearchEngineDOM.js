@@ -1,4 +1,5 @@
 import ID from "../Utils/SelectorID";
+import GeocodeUtils from "../Utils/GeocodeUtils";
 
 var SearchEngineDOM = {
 
@@ -366,7 +367,7 @@ var SearchEngineDOM = {
         var div = document.createElement("div");
         div.id = this._addUID("AutoCompletedLocation_" + id);
         div.className = "GPautoCompleteProposal";
-        div.innerHTML = location.fullText;
+        div.innerHTML = GeocodeUtils.getSuggestedLocationFreeform(location);
         if (div.addEventListener) {
             div.addEventListener("click", function (e) {
                 container.click(e);
@@ -516,9 +517,6 @@ var SearchEngineDOM = {
             }, {
                 id : "CadastralParcel",
                 title : "Parcelles cadastrales"
-            }, {
-                id : "Administratif",
-                title : "Administratif"
             }];
         }
 
@@ -617,7 +615,20 @@ var SearchEngineDOM = {
         input.type = "text";
         input.name = name;
         if (value) {
-            input.value = value;
+            if (Array.isArray(value)) {
+                var listId = name + "_list";
+                input.setAttribute("list", listId);
+                var dl = document.createElement("datalist");
+                dl.id = listId;
+                for (var i = 0; i < value.length; ++i) {
+                    var option = document.createElement("option");
+                    option.value = value[i];
+                    dl.appendChild(option);
+                }
+                div.appendChild(dl);
+            } else {
+                input.value = value;
+            }
         }
         div.appendChild(input);
 
@@ -723,21 +734,7 @@ var SearchEngineDOM = {
         if (typeof location === "string") {
             div.innerHTML = location;
         } else {
-            var places = location.placeAttributes;
-
-            if (places.freeform) {
-                // reponse en freeForm
-                div.innerHTML = places.freeform;
-            } else if (places.postalCode) {
-                // cas des StreetAddress, PositionOfInterest, Administratif
-                // on affiche uniquement ce qui est commun aux ressources ...
-                div.innerHTML = places.postalCode + " " + places.commune;
-            } else if (places.cadastralParcel) {
-                // cas des CadastralParcel
-                div.innerHTML = places.cadastralParcel;
-            } else {
-                div.innerHTML = "...";
-            }
+            div.innerHTML = GeocodeUtils.getGeocodedLocationFreeform(location);
         }
 
         container.appendChild(div);

@@ -5,8 +5,10 @@ import Logger from "../../Common/Utils/LoggerByDefault";
 import RightManagement from "../../Common/Utils/CheckRightManagement";
 import ID from "../../Common/Utils/SelectorID";
 import SearchEngineUtils from "../../Common/Utils/SearchEngineUtils";
+import GeocodeUtils from "../../Common/Utils/GeocodeUtils";
 import IconDefault from "./Utils/IconDefault";
 import SearchEngineDOM from "../../Common/Controls/SearchEngineDOM";
+import Utils from "../../Common/Utils";
 
 var logger = Logger.getLogger("searchengine");
 
@@ -77,7 +79,8 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
      * @param {Boolean}  [options.displayMarker] - set a marker on search result, defaults to true.
      * @param {String|Object}  [options.markerStyle] - set a marker style. Currently possible values are "blue" (default value), "orange", "red" and "green". But you can use an L.Icon object (see {@link http://leafletjs.com/reference-1.2.0.html#icon L.Icon }).
      * @param {Sting} [options.apiKey] - API key, mandatory if autoconf service has not been charged in advance
-     * @param {Object} [options.resources] - resources to be used by geocode and autocompletion services, by default : ["StreetAddress", "PositionOfInterest"]
+     * @param {String} [options.resources.geocode] - resources geocoding, by default : "location"
+     * @param {Object} [options.resources.autocomplete] - resources to be used by autocompletion service, by default : ["StreetAddress", "PositionOfInterest"]
      * @param {Boolean} [options.displayAdvancedSearch] - False to disable advanced search tools (it will not be displayed). Default is true (displayed)
      * @param {Object} [options.advancedSearch] - advanced search for geocoding (filters)
      * @param {Object} [options.geocodeOptions] - options of geocode service
@@ -110,6 +113,17 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
     initialize : function (options) {
         // on transmet les options au controle
         L.Util.setOptions(this, options);
+
+        if (typeof this.options.resources === "undefined") {
+            this.options.resources = {};
+        }
+
+        if (typeof this.options.resources.geocode === "undefined" || this.options.resources.geocode === "") {
+            this.options.resources.geocode = "location";
+        }
+        if (typeof this.options.resources.autocomplete === "undefined" || this.options.resources.autocomplete.length === 0) {
+            this.options.resources.autocomplete = ["PositionOfInterest", "StreetAddress"];
+        }
 
         /** uuid */
         this._uid = ID.generate();
@@ -243,59 +257,59 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
         // si on ne trouve pas de ressources ou certaines ressources ne sont
         // pas disponible, on previent l'utilisateur (message d'information).
 
-        // les ressources en options pour les 2 services
-        // on en definit par defaut
-        if (!this.options.resources || this.options.resources.length === 0) {
-            this.options.resources = [
-                "StreetAddress",
-                "PositionOfInterest"
-                // FIXME choix par defaut ?
-                // "CadastralParcel",
-                // "Administratif"
-            ];
-        }
-
-        var _opts = null;
-        var _res = [];
+        var _resources = null;
         var _key = null;
 
         // les ressources du service de geocodage
         // on prend celles des options du services en priorité
         _key = this.options.geocodeOptions.apiKey;
-        _opts = this.options.geocodeOptions.filterOptions;
-        _res = (_opts) ? _opts.type : [];
-        if (!_res || _res.length === 0) {
-            _res = this.options.resources || [
+        // on récupère les éventuelles ressources passées en option, soit dans geocodeOptions :
+        _resources = (this.options.geocodeOptions.index) ? this.options.geocodeOptions.index : "";
+        // soit directement dans options.resources.geocodage :
+        if (!_resources) {
+            _resources = this.options.resources.geocodage;
+        }
+        // ou celles par défaut sinon.
+        if (!_resources) {
+            _resources = "location";
+        }
+
+        if (_resources === "location") {
+            _resources = [
                 "StreetAddress",
-                "PositionOfInterest"
-                // "CadastralParcel",
-                // "Administratif"
+                "PositionOfInterest",
+                "CadastralParcel"
             ];
+        } else {
+            if (!Array.isArray(_resources)) _resources = [_resources];
         }
 
         var rightManagementGeocode = RightManagement.check({
             key : _key || this.options.apiKey,
-            resources : _res,
+            resources : _resources,
             services : ["Geocode"]
         });
 
         // les ressources du service d'autocompletion
         // on prend celles des options du services en priorité
         _key = this.options.autocompleteOptions.apiKey;
-        _opts = this.options.autocompleteOptions.filterOptions;
-        _res = (_opts) ? _opts.type : [];
-        if (!_res || _res.length === 0) {
-            _res = this.options.resources || [
+        // on récupère les éventuelles ressources passées en option, soit dans autocompleteOptions
+        _resources = (this.options.autocompleteOptions) ? this.options.autocompleteOptions.type : [];
+        // soit dans options.resources.autocomplete
+        if (!_resources || _resources.length === 0) {
+            _resources = this.options.resources.autocomplete;
+        }
+        // ou celles par défaut sinon.
+        if (!_resources || _resources.length === 0) {
+            _resources = [
                 "StreetAddress",
                 "PositionOfInterest"
-                // "CadastralParcel",
-                // "Administratif"
             ];
         }
 
         var rightManagementAutoComplete = RightManagement.check({
             key : _key || this.options.apiKey,
-            resources : _res,
+            resources : _resources,
             services : ["AutoCompletion"]
         });
 
@@ -316,16 +330,6 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
             this._servicesRightManagement["Geocode"] = {};
             this._servicesRightManagement["Geocode"]["resources"] = rightManagementGeocode["Geocode"];
             this._servicesRightManagement["Geocode"]["key"] = rightManagementGeocode["key"];
-        }
-
-        // FIXME doit on construire les menus du geocodage avancé en fonction des ressources
-        // disponibles ?
-        if (!this.options.advancedSearch || Object.keys(this.options.advancedSearch).length === 0) {
-            var r = this._servicesRightManagement["Geocode"]["resources"];
-            for (var i = 0; i < r.length; i++) {
-                var code = r[i];
-                this.options.advancedSearch[code] = [];
-            }
         }
     },
 
@@ -416,42 +420,49 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
         // cf. onGeocodingAdvancedSearchCodeChange() pour la selection de la
         // ressource de geocodage à afficher
 
-        // TODO la liste des ressources de geocodage est codée en statique
-        // dans le DOM, cad les 4 ressources sont donc disponibles dans le menu
-        // deroulant :
-        // - PositionOfInterest
-        // - StreetAddress
-        // - CadastralParcel
-        // - Administratif
-        // Cette liste doit elle être dynamique ? Ne doit on pas prendre en
-        // compte uniquement les ressources que le client a renseigné ?
-
-        var advancedSearchCodesByDefault = [{
-            id : "PositionOfInterest",
-            title : "Lieux/toponymes"
-        }, {
-            id : "StreetAddress",
-            title : "Adresses"
-        }, {
-            id : "CadastralParcel",
-            title : "Parcelles cadastrales"
-        }, {
-            id : "Administratif",
-            title : "Administratif"
-        }];
-
-        var _resources = Object.keys(this.options.advancedSearch);
-        for (var i = 0; i < _resources.length; i++) {
-            var id = _resources[i];
-            for (var j = 0; j < advancedSearchCodesByDefault.length; j++) {
-                if (advancedSearchCodesByDefault[j].id === id) {
-                    this._advancedSearchCodes.push(advancedSearchCodesByDefault[j]);
-                }
+        var geocodeResources = this.options.resources.geocode;
+        if (geocodeResources === "location") {
+            geocodeResources = ["PositionOfInterest", "StreetAddress", "CadastralParcel"];
+        }
+        if (!Array.isArray(geocodeResources)) {
+            geocodeResources = [geocodeResources];
+        }
+        for (var i = 0; i < geocodeResources.length; i++) {
+            switch (geocodeResources[i]) {
+                case "PositionOfInterest":
+                    this._advancedSearchCodes.push({
+                        id : "PositionOfInterest",
+                        title : "Lieux/toponymes"
+                    });
+                    break;
+                case "StreetAddress":
+                    this._advancedSearchCodes.push({
+                        id : "StreetAddress",
+                        title : "Adresses"
+                    });
+                    break;
+                case "CadastralParcel":
+                    this._advancedSearchCodes.push({
+                        id : "CadastralParcel",
+                        title : "Parcelles cadastrales"
+                    });
+                    break;
+                default:
+                    break;
             }
         }
-
+        // par défaut, au cas où aucune ressource passée en option ne correspond à celles attendues
         if (this._advancedSearchCodes.length === 0) {
-            this._advancedSearchCodes = advancedSearchCodesByDefault;
+            this._advancedSearchCodes = [{
+                id : "StreetAddress",
+                title : "Adresses"
+            }, {
+                id : "PositionOfInterest",
+                title : "Lieux/toponymes"
+            }, {
+                id : "CadastralParcel",
+                title : "Cadastre"
+            }];
         }
 
         logger.log("advancedSearchCodes", this._advancedSearchCodes);
@@ -469,180 +480,11 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
         // de l'objet geocode ? doit on tous les mettre ou doit on faire un choix ?
 
         // liste des filtres par defauts pour toutes les ressources
-        var advancedSearchFiltersByDefault = {
-            PositionOfInterest : [{
-                name : "city", // municipality !?
-                title : "Ville",
-                filter : false,
-                sep : true
-            }, {
-                name : "importance",
-                title : "Importance",
-                filter : true
-            }, {
-                name : "nature",
-                title : "Nature",
-                filter : true
-            }, {
-                name : "territory",
-                title : "Territoire",
-                filter : true
-            }, {
-                name : "insee",
-                title : "Code commune (INSEE)",
-                filter : true
-            }, {
-                name : "department",
-                title : "Département",
-                filter : true
-            }],
-            StreetAddress : [
-                // INFO
-                // ce ne sont pas des filtres mais une location dite structurée !
-                {
-                    name : "number",
-                    title : "Numéro",
-                    filter : false,
-                    sep : true
-                }, {
-                    name : "street",
-                    title : "Rue",
-                    filter : false,
-                    sep : true
-                }, {
-                    name : "postalCode",
-                    title : "Code Postal",
-                    filter : false,
-                    sep : true
-                }, {
-                    name : "city", // municipality !?
-                    title : "Ville",
-                    filter : false,
-                    sep : true
-                },
-                // {
-                //     name : "municipality", // commune !?
-                //     title : "Commune",
-                //     filter : true,
-                //     sep : true
-                // },
-                {
-                    name : "territory",
-                    title : "Territoire",
-                    filter : true
-                }, {
-                    name : "insee",
-                    title : "Code commune (INSEE)",
-                    filter : true
-                }, {
-                    name : "department",
-                    title : "Département",
-                    filter : true
-                }
-            ],
-            CadastralParcel : [
-                // INFO
-                // ce ne sont pas des filtres mais une location dite structurée !
-                // ex 94 067 000 0D 0041
-                {
-                    name : "department",
-                    title : "Département",
-                    filter : false,
-                    sep : false,
-                    value : "__"
-                }, {
-                    name : "commune",
-                    title : "Commune",
-                    filter : false,
-                    sep : false,
-                    value : "___"
-                }, {
-                    name : "absorbedCity",
-                    title : "Commune absorbée",
-                    filter : false,
-                    sep : false,
-                    value : "___"
-                }, {
-                    name : "section",
-                    title : "Section",
-                    filter : false,
-                    sep : false,
-                    value : "__"
-                },
-                // {
-                //     name : "sheet",
-                //     title :  "Feuille",
-                //     filter : false,
-                //     sep : false
-                // },
-                {
-                    name : "number",
-                    title : "Numéro",
-                    filter : false,
-                    sep : false,
-                    value : "____"
-                }
-                // {
-                //     name : "insee",
-                //     title : "Code commune (INSEE)",
-                //     filter : false,
-                //     sep : false
-                // },
-                // {
-                //     name : "municipality",
-                //     title : "Ville",
-                //     filter : false,
-                //     sep : false
-                // }
-
-            ],
-            Administratif : [{
-                name : "prefecture",
-                title : "Préfecture",
-                filter : true
-            }, {
-                name : "inseeRegion",
-                title : "Code région (INSEE)",
-                filter : true
-            }, {
-                name : "inseeDepartment",
-                title : "Code département (INSEE)",
-                filter : true
-            }, {
-                name : "city", // municipality !?
-                title : "Ville",
-                filter : false,
-                sep : true
-            }]
-        };
+        this._advancedSearchFilters = SearchEngineUtils.advancedSearchFiltersByDefault;
 
         // on merge les options avancées avec celles par defaut
         var advancedSearchFiltersCustom = this.options.advancedSearch;
-        for (var code in advancedSearchFiltersCustom) {
-            if (advancedSearchFiltersCustom.hasOwnProperty(code)) {
-                // si object null ou vide (StreetAddress : [] || null), on prend les params. par defaut
-                // sauf si pas de droit !
-                if (!advancedSearchFiltersCustom[code] || advancedSearchFiltersCustom[code].length === 0) {
-                    advancedSearchFiltersCustom[code] = advancedSearchFiltersByDefault[code];
-                    continue;
-                }
-
-                // si la clef filter est absente, on l'ajoute...
-                // par defaut, le filtre municipality est dit structuré !
-                var filters = advancedSearchFiltersCustom[code];
-                for (var i = 0; i < filters.length; i++) {
-                    var o = filters[i];
-                    if (!o.hasOwnProperty("filter")) {
-                        o.filter = o.name !== "municipality";
-                    }
-                }
-            }
-        }
-
-        L.Util.extend(this._advancedSearchFilters,
-            advancedSearchFiltersByDefault,
-            advancedSearchFiltersCustom
-        );
+        Utils.assign(this._advancedSearchFilters, advancedSearchFiltersCustom);
 
         logger.log("advancedSearchFilters", this._advancedSearchFilters);
     },
@@ -770,11 +612,8 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
 
         // au cas où les options du services ne sont pas renseignées, on y ajoute
         // les tables de ressources
-        if (resources && L.Util.isArray(resources) && !options.filterOptions) {
-            if (!options.filterOptions) {
-                options.filterOptions = {};
-            }
-            options.filterOptions.type = resources;
+        if (resources && L.Util.isArray(resources)) {
+            options.type = resources;
         }
 
         // gestion de la clef !
@@ -843,7 +682,7 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
         }
 
         // on ne fait pas de requête si la parametre 'text' est vide !
-        if (!settings.location) {
+        if (!settings.query) {
             return;
         }
 
@@ -866,25 +705,15 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
         L.Util.extend(options, this.options.geocodeOptions);
         // ainsi que la recherche, les filtres du geocodage avancé et les callbacks
         L.Util.extend(options, settings);
-        // on y force le param suivant, s'il n'a pas été surchargé :
-        if (!options.hasOwnProperty("returnFreeForm")) {
-            L.Util.extend(options, {
-                returnFreeForm : true
-            });
-        }
 
-        var resources = this._servicesRightManagement["Geocode"].resources;
-        if (!resources || Object.keys(resources).length === 0) {
-            return;
-        }
-
-        // au cas où les options du services ne sont pas renseignées, on y ajoute
-        // les tables de ressources
-        if (resources && L.Util.isArray(resources) && !options.filterOptions) {
-            if (!options.filterOptions) {
-                options.filterOptions = {};
+        // on ajoute le paramètre index spécifiant les ressources.
+        var resources = this.options.resources.geocode;
+        if (resources) {
+            // il se peut que l'utilisateur ait surchargé ce paramètre dans geocodeOptions,
+            // ou qu'il ait déjà été rempli (cas de la recherche avancée)
+            if (!options.index) {
+                options.index = resources;
             }
-            options.filterOptions.type = resources;
         }
 
         // gestion de la clef !
@@ -951,11 +780,11 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
      * @private
      */
     _getGeocodeCoordinatesFromFullText : function (suggestedLocation, i) {
-        var _location = suggestedLocation.fullText;
+        var _location = GeocodeUtils.getSuggestedLocationFreeform(suggestedLocation);
 
         var context = this;
         this._requestGeocoding({
-            location : _location,
+            query : _location,
             // callback onSuccess
             onSuccess : function (response) {
                 logger.log("request from Geocoding (coordinates null)", response);
@@ -963,8 +792,8 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
                     // on modifie les coordonnées du résultat en EPSG:4326 donc lat,lon
                     if (context._suggestedLocations && context._suggestedLocations[i]) {
                         context._suggestedLocations[i].position = {
-                            x : response.locations[0].position.y,
-                            y : response.locations[0].position.x
+                            lat : response.locations[0].position.y,
+                            lon : response.locations[0].position.x
                         };
                         // et on l'affiche dans la liste
                         context._locationsToBeDisplayed.unshift(context._suggestedLocations[i]);
@@ -1012,8 +841,8 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
     _setPosition : function (position, zoom) {
         var map = this._map;
 
-        map.setZoomAround(L.latLng(position.x, position.y), zoom, true);
-        map.panTo(L.latLng(position.x, position.y));
+        map.setZoomAround(L.latLng(position), zoom, true);
+        map.panTo(L.latLng(position));
     },
 
     /**
@@ -1133,7 +962,7 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
                 icon : _icon
             };
 
-            this._marker = L.marker(L.latLng(position.x, position.y), options);
+            this._marker = L.marker(L.latLng(position), options);
             this._marker.addTo(map);
 
             // FIXME
@@ -1145,38 +974,22 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
                 var popupContent = null;
 
                 if (typeof information !== "string") {
-                    var values = [];
-                    if (information.service === "DirectGeocodedLocation") {
-                        if (information.fields.freeform) {
-                            popupContent = information.fields.freeform;
-                        } else {
-                            var attributs = this._advancedSearchFilters[information.type];
-                            for (var i = 0; i < attributs.length; i++) {
-                                var key = attributs[i].name;
-                                var value = information.fields[key];
-                                // on prend que les chaines de caractères
-                                if (typeof value === "string" || typeof value === "number") {
-                                    values.push(value);
+                    if (information.service === "GeocodedLocation") {
+                        popupContent = "<ul>";
+                        var attributes = information.location.placeAttributes;
+                        for (var attr in attributes) {
+                            if (attributes.hasOwnProperty(attr)) {
+                                if (attr !== "trueGeometry" && attr !== "extraFields" && attr !== "houseNumberInfos" && attr !== "_count") {
+                                    popupContent += "<li>";
+                                    popupContent += "<span class=\"gp-attname-others-span\">" + attr.toUpperCase() + " : </span>";
+                                    popupContent += attributes[attr];
+                                    popupContent += " </li>";
                                 }
                             }
-
-                            popupContent = values.join(" - ");
                         }
+                        popupContent += " </ul>";
                     } else if (information.service === "SuggestedLocation") {
-                        if (information.fields.fullText) {
-                            popupContent = information.fields.fullText;
-                        } else {
-                            values.push(information.fields.street || "");
-                            values.push(information.fields.postalCode || "");
-                            values.push(information.fields.commune || "");
-
-                            if (information.type === "PositionOfInterest") {
-                                values.push(information.fields.poi || "");
-                                values.push(information.fields.kind || "");
-                            }
-
-                            popupContent = values.join(" - ");
-                        }
+                        popupContent = GeocodeUtils.getSuggestedLocationFreeform(information.location);
                     } else {
                         popupContent = "sans informations.";
                     }
@@ -1360,8 +1173,7 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
                         function () {
                             logger.warn("Launch a geocode request (code postal) !");
                             context._requestGeocoding({
-                                location : value,
-                                returnFreeForm : true,
+                                query : value,
                                 // callback onSuccess
                                 onSuccess : function (results) {
                                     logger.log("request from Geocoding", results);
@@ -1372,10 +1184,10 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
                                         var locations = results.locations;
                                         for (var i = 0; i < locations.length; i++) {
                                             var location = locations[i];
-                                            location.fullText = location.placeAttributes.freeform;
+                                            location.fullText = GeocodeUtils.getGeocodedLocationFreeform(location);
                                             location.position = {
-                                                x : location.position.y,
-                                                y : location.position.x
+                                                x : location.position.lon,
+                                                y : location.position.lat
                                             };
                                             context._locationsToBeDisplayed.push(location);
                                         }
@@ -1419,13 +1231,12 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
         // AutoCompletion : lon/lat
         // Geocoding : lat/lon
         var position = {
-            x : this._locationsToBeDisplayed[idx].position.y,
-            y : this._locationsToBeDisplayed[idx].position.x
+            lat : this._locationsToBeDisplayed[idx].position.y,
+            lon : this._locationsToBeDisplayed[idx].position.x
         };
         var info = {
             service : "SuggestedLocation",
-            type : this._locationsToBeDisplayed[idx].type,
-            fields : this._locationsToBeDisplayed[idx]
+            location : this._locationsToBeDisplayed[idx]
         };
 
         var zoom = this._getZoom(info);
@@ -1470,7 +1281,7 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
         // on met en place l'affichage des resultats dans une fenetre de recherche.
         var context = this;
         this._requestGeocoding({
-            location : value,
+            query : value,
             // callback onSuccess
             onSuccess : function (results) {
                 logger.log("request from Geocoding", results);
@@ -1510,9 +1321,8 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
 
         var position = this._geocodedLocations[idx].position;
         var info = {
-            service : "DirectGeocodedLocation",
-            type : this._geocodedLocations[idx].type,
-            fields : this._geocodedLocations[idx].placeAttributes
+            service : "GeocodedLocation",
+            location : this._geocodedLocations[idx]
         };
 
         var zoom = this._getZoom(info);
@@ -1579,65 +1389,24 @@ var SearchEngine = L.Control.extend(/** @lends L.geoportalControl.SearchEngine.p
         // recuperation des parametres des filtres pour les transmettre
         // à la requête, ainsi que le type de table de ressources de geocodage,
         // et le localisant
+        var _index = this._currentGeocodingCode;
+        var inputSearchTextContainer = L.DomUtil.get("GPsearchInputText-" + this._uid);
+        var _location = inputSearchTextContainer.value;
         var _filterOptions = {};
-        _filterOptions["type"] = [this._currentGeocodingCode];
-
-        var _location = this._currentGeocodingLocation || "";
-        if (this._currentGeocodingCode === "CadastralParcel") {
-            _location = ""; // on ne souhaite plus la saisie libre...
-        }
 
         for (var i = 0; i < data.length; i++) {
             var filter = data[i];
-            // on ne verifie pas les clefs sans valeur...
-            if (!filter.value) {
-                continue;
-            }
-
-            var filters = this._advancedSearchFilters[this._currentGeocodingCode];
-            for (var j = 0; j < filters.length; j++) {
-                var o = filters[j];
-
-                if (o.name === filter.key) {
-                    if (o.filter) {
-                        _filterOptions[filter.key] = filter.value;
-                    } else {
-                        // on concatene tous les valeurs des champs de recherche,
-                        // et on complete au besoin avec les valeur par defaut
-                        // (ex. '_')
-                        if (o.value) {
-                            var cur = filter.value.length;
-                            var max = o.value.length;
-                            if (max !== cur) {
-                                var masked = max - cur;
-                                var filler = o.value.charAt(0);
-                                while (filler.length < masked) {
-                                    filler += filler;
-                                }
-                                var fillerSlice = filler.slice(0, masked);
-                                filter.value = filter.value + fillerSlice;
-                            }
-                            // la location est de type concaténée dite "freeform"
-                            _location += filter.value;
-                        } else {
-                            // on est dans le cas où l'utilisateur utilise
-                            // la location structurée de la recherche avancée,
-                            // donc on ne tient plus compte de la saisie libre...
-                            if (typeof _location === "string") {
-                                _location = {};
-                            }
-                            _location[filter.key] = filter.value;
-                        }
-                    }
-                }
+            if (filter.value) {
+                _filterOptions[filter.key] = filter.value;
             }
         }
 
         // on met en place l'affichage des resultats dans une fenetre de recherche.
         var context = this;
         this._requestGeocoding({
-            location : _location,
-            filterOptions : _filterOptions,
+            query : _location,
+            index : _index,
+            filters : _filterOptions,
             // callback onSuccess
             onSuccess : function (results) {
                 logger.log(results);

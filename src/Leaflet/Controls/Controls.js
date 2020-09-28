@@ -262,7 +262,7 @@ var Controls = {
      *
      *       With parameter 'info' : {
      *           type : "PositionOfInterest" | "StreetAddress" | ...
-     *           service : "SuggestedLocation" | "DirectGeocodedLocation"
+     *           service : "SuggestedLocation" | "GeocodedLocation"
      *           fields : { // fields of service response }
      *       }
      *       ```
