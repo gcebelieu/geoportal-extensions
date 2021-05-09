@@ -1,46 +1,46 @@
 {
-   "scripts" : {},
-   "name" : "geoportal-extensions-openlayers",
-   "bugs" : {},
-   "dependencies" : {
-      "@mapbox/mapbox-gl-style-spec" : "13.11.0",
-      "ol" : "5.3.0",
-      "node-fetch" : "^2.6.1",
-      "xmldom" : "^0.1.27",
-      "geoportal-access-lib" : "2.1.8",
-      "proj4" : "2.7.0",
-      "sortablejs" : "1.8.4",
-      "ol-mapbox-style" : "4.2.1",
-      "loglevel" : "1.6.6",
-      "eventbusjs" : "0.2.0"
-   },
-   "devDependencies" : {},
-   "license" : "CECILL-B",
-   "directories" : {},
-   "version" : "3.0.14",
    "peerDependencies" : {},
-   "author" : "IGNF",
-   "main" : "dist/GpPluginOpenLayers-src.js",
-   "date" : "30/03/2021",
-   "bundleDependencies" : [],
    "homepage" : "https://geoservices.ign.fr/documentation/utilisation_web/extension-openlayers.html",
-   "repository" : {
-      "type" : "git",
-      "url" : "https://github.com/IGNF/geoportal-extensions.git"
-   },
-   "module" : "src/OpenLayers/index.js",
-   "description" : "French Geoportal Extensions for OpenLayers",
-   "keywords" : [
-      "geoportail",
-      "plugin",
-      "javascript",
-      "OpenLayers"
-   ],
+   "license" : "CECILL-B",
    "files" : [
       "dist/",
       "src/",
       "LICENCE.md",
       "README.md",
       "package.json"
-   ]
+   ],
+   "scripts" : {},
+   "devDependencies" : {},
+   "bugs" : {},
+   "dependencies" : {
+      "node-fetch" : "^2.6.1",
+      "@mapbox/mapbox-gl-style-spec" : "13.14.0",
+      "ol-mapbox-style" : "6.3.2",
+      "ol" : "6.3.1",
+      "eventbusjs" : "0.2.0",
+      "geoportal-access-lib" : "2.1.8",
+      "proj4" : "2.7.0",
+      "loglevel" : "1.6.6",
+      "sortablejs" : "1.8.4",
+      "xmldom" : "^0.1.27"
+   },
+   "date" : "26/04/2021",
+   "repository" : {
+      "url" : "https://github.com/IGNF/geoportal-extensions.git",
+      "type" : "git"
+   },
+   "bundleDependencies" : [],
+   "version" : "3.0.15",
+   "name" : "geoportal-extensions-openlayers",
+   "module" : "src/OpenLayers/index.js",
+   "author" : "IGNF",
+   "main" : "dist/GpPluginOpenLayers-src.js",
+   "keywords" : [
+      "geoportail",
+      "plugin",
+      "javascript",
+      "OpenLayers"
+   ],
+   "directories" : {},
+   "description" : "French Geoportal Extensions for OpenLayers"
 }

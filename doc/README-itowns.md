@@ -1,6 +1,6 @@
 # Extension Géoportail pour iTowns
 
-[![release](https://img.shields.io/badge/release%20-itowns%202.2.4-brightgreen.svg?style=flat)](https://github.com/IGNF/geoportal-extensions/releases/tag/itowns-2.3.2)
+[![release](https://img.shields.io/badge/release%20-itowns%202.3.2-brightgreen.svg?style=flat)](https://github.com/IGNF/geoportal-extensions/releases/tag/itowns-2.3.2)
 
 <!-- toc -->
 

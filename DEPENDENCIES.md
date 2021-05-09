@@ -3,17 +3,17 @@
 * openlayers
 
 last
-└── openlayers@5.3.0
+└── openlayers@6.3.1
 
 * olms
 
 last
-└── "ol-mapbox-style@4.2.1"
+└── "ol-mapbox-style@6.3.2"
 
 * proj4
 
 last
-└── proj4@2.5.0
+└── proj4@2.7.0
 
 * proj4leaflet
 

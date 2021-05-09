@@ -90,6 +90,9 @@
                         // collapsed : true
                     }
                 });
+                attribution.addEventListener("attributions:update", function (e) {
+                    console.log("update::attributions", e);
+                });
                 globeView.addWidget(attribution);
             });
         });

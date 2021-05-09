@@ -392,18 +392,12 @@ var GfiUtils = {
 
                     var _res = map.getView().getResolution();
                     var _url = null;
-                    // FIXME
+                    // INFO
                     // en fonction de la version d'openlayers, la méthode est differente :
                     // - getGetFeatureInfoUrl en v5
                     // - getFeatureInfoUrl en v6
-                    // mais, il y'a une surcharge de cette méthode qui pose quelques soucis...
-                    // (cf. src/OpenLayers/Source/WMTS.js), il faudra investiguer dès que nous
-                    // passerons en v6.0.0...
-                    var _getFeatureInfoUrl = (typeof l.getSource().getFeatureInfoUrl === "function")
-                        ? l.getSource().getFeatureInfoUrl : l.getSource().getGetFeatureInfoUrl;
-
                     if (format === "wmts") {
-                        _url = _getFeatureInfoUrl.call(l.getSource(),
+                        _url = l.getSource().getFeatureInfoUrl.call(l.getSource(),
                             olCoordinate,
                             _res,
                             map.getView().getProjection(), {
@@ -411,7 +405,7 @@ var GfiUtils = {
                             }
                         );
                     } else {
-                        _url = _getFeatureInfoUrl.call(l.getSource(),
+                        _url = l.getSource().getFeatureInfoUrl.call(l.getSource(),
                             olCoordinate,
                             _res,
                             map.getView().getProjection(), {

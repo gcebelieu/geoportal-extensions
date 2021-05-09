@@ -6,6 +6,10 @@
 
 ## Summary
 
+upgrade des dependances :
+- openLayers@6.3.1
+- ol-mapbox-style@6.3.2
+
 ## Changelog
 
 * [Added]

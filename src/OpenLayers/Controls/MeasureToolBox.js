@@ -67,6 +67,7 @@ var MeasureToolBox = {
             logger.trace("create toolbox !");
             // creation et ajout de la toolbox sur la map
             var toolboxContainer = this._createToolBoxContainerElement(uid);
+            toolboxContainer.style.pointerEvents = "auto"; // ajout pour ol6
             var overlaysContainer = mapContainer.getElementsByClassName("ol-overlaycontainer-stopevent");
             overlaysContainer[0].appendChild(toolboxContainer);
             // mapContainer.appendChild(toolboxContainer);

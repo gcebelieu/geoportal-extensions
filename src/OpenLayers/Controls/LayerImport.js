@@ -4,7 +4,7 @@ import "../CSS/Controls/LayerImport/GPimportOpenLayers.css";
 import Control from "ol/control/Control";
 import { unByKey as olObservableUnByKey } from "ol/Observable";
 import Collection from "ol/Collection";
-import RenderFeature from "ol/render/Feature"; // FIXME RenderFeature !?
+// import RenderFeature from "ol/render/Feature"; // FIXME RenderFeature n'est pas dispo dans le bundle !?
 import WMTSTileGrid from "ol/tilegrid/WMTS";
 import { createXYZ as olCreateXYZTileGrid } from "ol/tilegrid"; // FIXME olCreateXYZTileGrid !?
 import {
@@ -1032,8 +1032,8 @@ var LayerImport = (function (Control) {
             return;
         }
 
-        var vectorSource = null;
         var vectorLayer = null;
+        var vectorSource = null;
         var vectorFormat = null;
         var vectorStyle = null;
 
@@ -1050,11 +1050,15 @@ var LayerImport = (function (Control) {
             // contexte
             var self = this;
 
+            // style mapbox
             var _glStyle = this._mapBoxObj = JSON.parse(fileContent);
 
+            // liste des sources
             var _glSources = _glStyle.sources;
 
-            // multisources ?
+            // FIXME a t on du multi-sources ? 
+            // mais comment doit on les traiter ?
+            // EXPERIMENTAL !
             var _multiSources = (Object.keys(_glSources).length > 1) ? 1 : 0;
 
             for (var _glSourceId in _glSources) {
@@ -1156,7 +1160,7 @@ var LayerImport = (function (Control) {
 
                         if (_glTiles) {
                             // service tuilé et/ou mapbox
-                            vectorFormat = new MVT({ featureClass : RenderFeature });
+                            vectorFormat = new MVT(/* { featureClass : RenderFeature } */);
                             vectorSource = new VectorTileSource({
                                 attributions : _glSource.attribution,
                                 format : vectorFormat,
@@ -1194,7 +1198,7 @@ var LayerImport = (function (Control) {
                             vectorLayer.gpResultLayerId = "layerimport:" + this._currentImportType;
                         } else if (_glUrl) {
                             // service avec un tilejson
-                            vectorFormat = new MVT({ featureClass : RenderFeature });
+                            vectorFormat = new MVT(/* { featureClass : RenderFeature } */);
                             vectorLayer = new VectorTileLayer({
                                 visible : false,
                                 // zIndex : 0
