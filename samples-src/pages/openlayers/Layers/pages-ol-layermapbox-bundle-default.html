@@ -1,0 +1,58 @@
+{{#extend "ol-sample-bundle-layout"}}
+
+{{#content "head"}}
+        <title>Sample openlayers</title>
+{{/content}}
+
+{{#content "style"}}
+        <style>
+            div#map {
+                width: 100%;
+                height: 500px;
+            }
+        </style>
+{{/content}}
+
+{{#content "body"}}
+            <h2>Ajout d'une couche MapBox</h2>
+            <!-- map -->
+            <div id="map">
+            </div>
+{{/content}}
+
+{{#content "js"}}
+            <script type="text/javascript">
+                var map;
+                window.onload = function() {
+                    // on cache l'image de chargement du Géoportail.
+                    document.getElementById('map').style.backgroundImage = 'none';
+
+                    map = new ol.Map({
+                        target : "map",
+                        view : new ol.View({
+                            center : [288074.8449901076, 6247982.515792289],
+                            zoom : 6
+                        }),
+                        layers : [
+                            new ol.layer.GeoportalWMTS({
+                                layer : "ORTHOIMAGERY.ORTHOPHOTOS"
+                            }),
+                            new ol.layer.GeoportalMapBox({
+                                layer : "PLAN.IGN",
+                                style : "gris"
+                            }, {
+                                opacity : 0.5,
+                                declutter : true
+                            })
+                        ]
+                    });
+
+                    var layerSwitcher = new ol.control.LayerSwitcher({});
+                    map.addControl(layerSwitcher);
+                    var attribution = new ol.control.GeoportalAttribution({});
+                    map.addControl(attribution);
+                };
+           </script>
+{{/content}}
+
+{{/extend}}
